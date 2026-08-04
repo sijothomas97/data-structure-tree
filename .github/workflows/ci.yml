@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore BinaryTree.sln
+
+      - name: Build
+        run: dotnet build BinaryTree.sln --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test BinaryTree.sln --configuration Release --no-build --logger "trx;LogFileName=test-results.trx"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: '**/TestResults/*.trx'
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t binarytree-api:${{ github.sha }} .
+
+      - name: Smoke test image
+        run: |
+          docker run -d --rm --name binarytree-api -p 8080:8080 binarytree-api:${{ github.sha }}
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8080/tree > /dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS -X POST http://localhost:8080/insert \
+            -H 'Content-Type: application/json' -d '{"value": 8}'
+          curl -fsS http://localhost:8080/traverse/inorder | grep -q '"sequence":\[8\]'
+          curl -fsS http://localhost:8080/ | grep -q 'Binary Tree Visualizer'
+          docker stop binarytree-api
