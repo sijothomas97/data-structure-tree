@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Binary Tree Visualizer</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --panel: #1e293b;
+    --border: #334155;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --accent: #38bdf8;
+    --visited: #f59e0b;
+    --current: #ef4444;
+    --lca: #a855f7;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  header {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+  header h1 { margin: 0; font-size: 1.2rem; }
+  header a { color: var(--accent); font-size: 0.85rem; text-decoration: none; }
+  header a:hover { text-decoration: underline; }
+  main {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    gap: 1rem;
+    padding: 1rem 1.5rem;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  @media (max-width: 800px) { main { grid-template-columns: 1fr; } }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem;
+  }
+  .panel h2 {
+    margin: 0 0 0.6rem;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+  }
+  .row { display: flex; gap: 0.5rem; margin-bottom: 0.6rem; flex-wrap: wrap; align-items: center; }
+  input[type="number"], select {
+    background: #0f172a;
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 0.45rem 0.6rem;
+    font-size: 0.9rem;
+    width: 6.5rem;
+  }
+  select { width: auto; }
+  button {
+    background: var(--accent);
+    color: #082f49;
+    border: none;
+    border-radius: 6px;
+    padding: 0.45rem 0.9rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button:hover { filter: brightness(1.1); }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  button.secondary { background: #475569; color: var(--text); }
+  button.danger { background: #7f1d1d; color: #fecaca; }
+  label { font-size: 0.85rem; color: var(--muted); }
+  input[type="range"] { width: 100%; accent-color: var(--accent); }
+  #svg-wrap { overflow-x: auto; }
+  svg { display: block; margin: 0 auto; }
+  .edge { stroke: var(--border); stroke-width: 2; }
+  .node circle {
+    fill: #0f172a;
+    stroke: var(--accent);
+    stroke-width: 2;
+    transition: fill 0.15s, stroke 0.15s;
+  }
+  .node text {
+    fill: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+    text-anchor: middle;
+    dominant-baseline: central;
+    pointer-events: none;
+  }
+  .node.visited circle { fill: #78350f; stroke: var(--visited); }
+  .node.current circle { fill: var(--current); stroke: #fecaca; }
+  .node.current text { fill: #fff; }
+  .node.lca circle { fill: #3b0764; stroke: var(--lca); stroke-width: 3; }
+  #sequence {
+    min-height: 1.6rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.95rem;
+    word-break: break-word;
+  }
+  #sequence .step { color: var(--muted); }
+  #sequence .step.done { color: var(--visited); font-weight: 700; }
+  #status { font-size: 0.8rem; color: var(--muted); min-height: 1.2rem; margin-top: 0.4rem; }
+  .stats { font-size: 0.85rem; color: var(--muted); }
+  .stats b { color: var(--text); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Binary Tree Visualizer</h1>
+  <span class="stats" id="stats">empty tree</span>
+  <a href="/swagger" target="_blank">Swagger API docs</a>
+</header>
+<main>
+  <div>
+    <div class="panel" style="margin-bottom:1rem">
+      <h2>Build tree</h2>
+      <div class="row">
+        <input id="value" type="number" placeholder="value" value="8">
+        <button id="insert">Insert</button>
+      </div>
+      <div class="row">
+        <button id="random" class="secondary">Insert random</button>
+        <button id="demo" class="secondary">Demo tree</button>
+        <button id="reset" class="danger">Clear</button>
+      </div>
+      <div id="status"></div>
+    </div>
+
+    <div class="panel" style="margin-bottom:1rem">
+      <h2>Animate traversal</h2>
+      <div class="row">
+        <select id="order">
+          <option value="inorder">In-order</option>
+          <option value="preorder">Pre-order</option>
+          <option value="postorder">Post-order</option>
+        </select>
+        <button id="play">Play</button>
+        <button id="stop" class="secondary" disabled>Stop</button>
+      </div>
+      <div class="row" style="flex-direction:column; align-items:stretch">
+        <label>Step delay: <span id="delay-label">600</span> ms</label>
+        <input id="delay" type="range" min="100" max="2000" step="100" value="600">
+      </div>
+      <div id="sequence"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Lowest common ancestor</h2>
+      <div class="row">
+        <input id="lca-first" type="number" placeholder="first">
+        <input id="lca-second" type="number" placeholder="second">
+        <button id="lca-go">Find</button>
+      </div>
+      <div id="lca-result" class="stats"></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Tree</h2>
+    <div id="svg-wrap">
+      <svg id="svg" width="820" height="420"></svg>
+    </div>
+  </div>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  const svg = document.getElementById("svg");
+  const statusEl = document.getElementById("status");
+  const statsEl = document.getElementById("stats");
+  const sequenceEl = document.getElementById("sequence");
+  const delaySlider = document.getElementById("delay");
+  const delayLabel = document.getElementById("delay-label");
+  const playBtn = document.getElementById("play");
+  const stopBtn = document.getElementById("stop");
+  const lcaResult = document.getElementById("lca-result");
+
+  let animating = false;
+  let stopRequested = false;
+
+  delaySlider.addEventListener("input", () => { delayLabel.textContent = delaySlider.value; });
+
+  function setStatus(msg) { statusEl.textContent = msg || ""; }
+
+  async function api(path, options) {
+    const res = await fetch(path, options);
+    if (res.status === 204) return null;
+    const body = await res.json().catch(() => null);
+    if (!res.ok) throw new Error((body && body.error) || res.statusText);
+    return body;
+  }
+
+  function nodeElement(id) {
+    return svg.querySelector('.node[data-id="' + id + '"]');
+  }
+
+  function clearHighlights() {
+    svg.querySelectorAll(".node").forEach(n => n.classList.remove("visited", "current", "lca"));
+  }
+
+  async function drawTree() {
+    const graph = await api("/tree");
+    const NS = "http://www.w3.org/2000/svg";
+    svg.innerHTML = "";
+
+    const n = graph.nodes.length;
+    statsEl.textContent = n === 0
+      ? "empty tree"
+      : n + " node" + (n > 1 ? "s" : "") + ", height " + graph.height;
+    if (n === 0) return graph;
+
+    const r = 18;
+    const width = Math.max(820, (n + 1) * 52);
+    const height = Math.max(420, (graph.height + 1) * 80);
+    svg.setAttribute("width", width);
+    svg.setAttribute("height", height);
+
+    const pos = {};
+    graph.nodes.forEach(node => {
+      pos[node.id] = {
+        x: ((node.xIndex + 1) / (n + 1)) * width,
+        y: 50 + node.depth * 75
+      };
+    });
+
+    graph.edges.forEach(edge => {
+      const line = document.createElementNS(NS, "line");
+      line.setAttribute("class", "edge");
+      line.setAttribute("x1", pos[edge.from].x);
+      line.setAttribute("y1", pos[edge.from].y);
+      line.setAttribute("x2", pos[edge.to].x);
+      line.setAttribute("y2", pos[edge.to].y);
+      svg.appendChild(line);
+    });
+
+    graph.nodes.forEach(node => {
+      const g = document.createElementNS(NS, "g");
+      g.setAttribute("class", "node");
+      g.setAttribute("data-id", node.id);
+      const c = document.createElementNS(NS, "circle");
+      c.setAttribute("cx", pos[node.id].x);
+      c.setAttribute("cy", pos[node.id].y);
+      c.setAttribute("r", r);
+      const t = document.createElementNS(NS, "text");
+      t.setAttribute("x", pos[node.id].x);
+      t.setAttribute("y", pos[node.id].y);
+      t.textContent = node.value;
+      g.appendChild(c);
+      g.appendChild(t);
+      svg.appendChild(g);
+    });
+    return graph;
+  }
+
+  async function insertValue(value) {
+    if (!Number.isInteger(value)) { setStatus("Enter an integer value."); return; }
+    const res = await api("/insert", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ value })
+    });
+    setStatus(res.added ? "Inserted " + value + "." : value + " is already in the tree.");
+    await drawTree();
+  }
+
+  document.getElementById("insert").addEventListener("click", () => {
+    insertValue(parseInt(document.getElementById("value").value, 10)).catch(e => setStatus(e.message));
+  });
+  document.getElementById("value").addEventListener("keydown", e => {
+    if (e.key === "Enter") document.getElementById("insert").click();
+  });
+
+  document.getElementById("random").addEventListener("click", () => {
+    insertValue(Math.floor(Math.random() * 99) + 1).catch(e => setStatus(e.message));
+  });
+
+  document.getElementById("demo").addEventListener("click", async () => {
+    try {
+      await api("/reset", { method: "POST" });
+      for (const v of [8, 3, 10, 1, 6, 14, 4, 7, 13]) {
+        await api("/insert", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ value: v })
+        });
+      }
+      setStatus("Demo tree loaded.");
+      sequenceEl.innerHTML = "";
+      lcaResult.textContent = "";
+      await drawTree();
+    } catch (e) { setStatus(e.message); }
+  });
+
+  document.getElementById("reset").addEventListener("click", async () => {
+    try {
+      await api("/reset", { method: "POST" });
+      sequenceEl.innerHTML = "";
+      lcaResult.textContent = "";
+      setStatus("Tree cleared.");
+      await drawTree();
+    } catch (e) { setStatus(e.message); }
+  });
+
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+  playBtn.addEventListener("click", async () => {
+    if (animating) return;
+    try {
+      const order = document.getElementById("order").value;
+      const res = await api("/traverse/" + order);
+      if (res.sequence.length === 0) { setStatus("Tree is empty — insert some values first."); return; }
+
+      animating = true;
+      stopRequested = false;
+      playBtn.disabled = true;
+      stopBtn.disabled = false;
+      clearHighlights();
+
+      sequenceEl.innerHTML = res.sequence
+        .map(v => '<span class="step" data-v="' + v + '">' + v + "</span>")
+        .join('<span class="step"> &rarr; </span>');
+
+      let previous = null;
+      for (let i = 0; i < res.sequence.length; i++) {
+        if (stopRequested) break;
+        const id = res.sequence[i];
+        if (previous !== null) {
+          const prevEl = nodeElement(previous);
+          if (prevEl) { prevEl.classList.remove("current"); prevEl.classList.add("visited"); }
+        }
+        const el = nodeElement(id);
+        if (el) el.classList.add("current");
+        const stepEl = sequenceEl.querySelector('.step[data-v="' + id + '"]');
+        if (stepEl) stepEl.classList.add("done");
+        previous = id;
+        await sleep(parseInt(delaySlider.value, 10));
+      }
+      if (previous !== null) {
+        const prevEl = nodeElement(previous);
+        if (prevEl) { prevEl.classList.remove("current"); prevEl.classList.add("visited"); }
+      }
+      setStatus(stopRequested ? "Traversal stopped." : order + " traversal complete.");
+    } catch (e) {
+      setStatus(e.message);
+    } finally {
+      animating = false;
+      playBtn.disabled = false;
+      stopBtn.disabled = true;
+    }
+  });
+
+  stopBtn.addEventListener("click", () => { stopRequested = true; });
+
+  document.getElementById("lca-go").addEventListener("click", async () => {
+    const first = parseInt(document.getElementById("lca-first").value, 10);
+    const second = parseInt(document.getElementById("lca-second").value, 10);
+    if (!Number.isInteger(first) || !Number.isInteger(second)) {
+      lcaResult.textContent = "Enter two integer values.";
+      return;
+    }
+    try {
+      const res = await api("/lca?first=" + first + "&second=" + second);
+      clearHighlights();
+      const el = nodeElement(res.ancestor);
+      if (el) el.classList.add("lca");
+      lcaResult.innerHTML = "LCA(" + first + ", " + second + ") = <b>" + res.ancestor + "</b>";
+    } catch (e) {
+      lcaResult.textContent = e.message;
+    }
+  });
+
+  drawTree().catch(e => setStatus(e.message));
+})();
+</script>
+</body>
+</html>
