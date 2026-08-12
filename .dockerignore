@@ -1,0 +1,8 @@
+**/bin/
+**/obj/
+**/TestResults/
+.git/
+.github/
+legacy/
+*.md
+.DS_Store
